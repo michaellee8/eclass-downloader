@@ -80,7 +80,8 @@ const ECLASS_PASSWORD = "mlml1026";
 
     const runningPage = await browser.newPage();
     await asyncForEach(
-      classrooms.slice(9, classrooms.length),
+      // classrooms.slice(9, classrooms.length),
+      classrooms,
       async ({ value: classValue, text: classText }) => {
         await runningPage.goto(
           `http://${BASE_URL}/eclass40/src/resource/eclass_files/files/tree_nav.php?course_id=${classValue}&categoryID=&attach=&attachment=&fieldname=`
