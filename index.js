@@ -89,42 +89,43 @@ const ECLASS_PASSWORD = "mlml1026";
         // console.log("running fine here");
         // page.screenshot({ path: "./example.png" });
         await runningPage.evaluate(() => $("#jstree").jstree("open_all"));
-        console.log(`Fetched folder structure of ${classText}`);
 
         await delay(2000);
 
-        const folderUrls = await runningPage.evaluate(() =>
-          $("li[role=treeitem] > a.jstree-anchor")
-            .map(function() {
-              return (
-                "http://eclass.tkpss.edu.hk/eclass40/src/resource/eclass_files/files/" +
-                $(this).attr("href")
-              );
-            })
-            .get()
+        const folderUrls = await runningPage.evaluate(
+          BASE_URL =>
+            $("li[role=treeitem] > a.jstree-anchor")
+              .map(function() {
+                return `http://${BASE_URL}/eclass40/src/resource/eclass_files/files/${$(this).attr("href")}`;
+              })
+              .get(),
+          BASE_URL
         );
+        console.log(`Fetched folder structure of ${classText}`);
         var obj = {};
         // console.log(JSON.stringify(folderUrls));
         await asyncForEach(folderUrls, async folderUrl => {
           await runningPage.goto(folderUrl);
-          const fileUrls = await runningPage.evaluate(() =>
-            Array.from(document.querySelectorAll("a"))
-              .map(e => ({
-                link: e.href,
-                name:
-                  e.childNodes && e.childNodes[1] && e.childNodes[1].nodeValue
-                    ? e.childNodes[1].nodeValue
-                    : null
-              }))
-              .filter(({ link }) =>
-                link.match(/javascript:newWindow\('(.*)',\d*\)/)
-              )
-              .map(({ link, name }) => ({
-                link:
-                  "http://eclass.tkpss.edu.hk/eclass40/src/resource/eclass_files/files/" +
-                  link.match(/javascript:newWindow\('(.*)',\d*\)/)[1],
-                name
-              }))
+          const fileUrls = await runningPage.evaluate(
+            BASE_URL =>
+              Array.from(document.querySelectorAll("a"))
+                .map(e => ({
+                  link: e.href,
+                  name:
+                    e.childNodes && e.childNodes[1] && e.childNodes[1].nodeValue
+                      ? e.childNodes[1].nodeValue
+                      : null
+                }))
+                .filter(({ link }) =>
+                  link.match(/javascript:newWindow\('(.*)',\d*\)/)
+                )
+                .map(({ link, name }) => ({
+                  link: `http://${BASE_URL}/eclass40/src/resource/eclass_files/files/${
+                    link.match(/javascript:newWindow\('(.*)',\d*\)/)[1]
+                  }`,
+                  name
+                })),
+            BASE_URL
           );
           fileUrls.forEach(({ link, name }) => {
             obj[link] = name;
@@ -133,13 +134,20 @@ const ECLASS_PASSWORD = "mlml1026";
 
         // await runningPage.screenshot({ path: "example.png" });
         // await runningPage._client.send("Page.set");
-        const result = Object.entries(obj);
+        const fileResults = Object.entries(obj);
         console.log(`Got File URL results`);
         runningPage._client.send("Page.setDownloadBehavior", {
           behavior: "allow",
           downloadPath: path.resolve(`./downloaded_files_2/${classText}`)
         });
-        await asyncForEach(result, async ([link, name], index) => {
+        const navigationPromsie = runningPage.waitForNavigation({
+          timeout: 0,
+          waitUntil: "networkidle0"
+        });
+        await runningPage.goto(
+          `http://${BASE_URL}/eclass40/src/resource/eclass_files/files/tree_nav.php?course_id=${classValue}&categoryID=&attach=&attachment=&fieldname=`
+        );
+        await asyncForEach(fileResults, async ([link, name], index) => {
           await runningPage.evaluate(
             (link, name) => {
               function downloadURI(uri, name) {
@@ -157,16 +165,18 @@ const ECLASS_PASSWORD = "mlml1026";
           await runningPage.waitFor(250);
           console.log(
             `Initiated download at ${classText} of ${name}, ${index + 1}/${
-              result.length
+              fileResults.length
             } triggered`
           );
         });
-        console.log(
-          `Press any key expect Crtl+C to start downloading next classroom`
-        );
-        await keypress();
+        await navigationPromsie;
+        // console.log(
+        //   `Press any key expect Crtl+C to start downloading next classroom`
+        // );
+        // await keypress();
       }
     );
+    browser.close();
 
     // const downloadPage = await browser.newPage();
     // await downloadPage.goto(result[0][0]);
